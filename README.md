@@ -1,6 +1,6 @@
 # 🖱️ Simple Auto-Click & Anti-AFK (Roblox)
 
-A lightweight, background-friendly Auto-Clicker and Anti-AFK script for Roblox, designed to be run through external executors. 
+A lightweight, background-friendly Auto-Clicker and Anti-AFK script for Roblox, designed to be run through ALL executors. 
 
 Farm your favorite games effectively without ever losing control of your PC!
 
