@@ -36,4 +36,4 @@ Use this script responsibly. While it is designed to be as undetectable as possi
 
 ---
 
-*Authored by HANN77 / Antigravity*
+HAVE FUN!
