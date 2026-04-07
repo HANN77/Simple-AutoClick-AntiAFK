@@ -1,5 +1,5 @@
 -- Simple Auto Clicker By Antigravity
--- Enhanced Edition v2.1
+-- Enhanced Edition v2.2
 
 -- ═══════════════════════════════════════════════════════════
 -- Services
@@ -11,6 +11,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local VirtualUser = game:GetService("VirtualUser")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
 
 -- ═══════════════════════════════════════════════════════════
 -- Cleanup previous instance
@@ -530,23 +532,209 @@ end
 local toggleBindBtn = makeKeybindRow("Toggle", "toggle", 6)
 local hideBindBtn = makeKeybindRow("Hide UI", "hide", 7)
 
--- ── Divider ──
-local divider = Instance.new("Frame")
-divider.Size = UDim2.new(0.8, 0, 0, 1)
-divider.BackgroundColor3 = colors.divider
-divider.BorderSizePixel = 0
-divider.LayoutOrder = 8
-divider.Parent = content
+-- ── Divider 1 ──
+local divider1 = Instance.new("Frame")
+divider1.Size = UDim2.new(0.8, 0, 0, 1)
+divider1.BackgroundColor3 = colors.divider
+divider1.BorderSizePixel = 0
+divider1.LayoutOrder = 8
+divider1.Parent = content
 
--- Center the divider
-local dividerLayout = Instance.new("Frame")
-dividerLayout.Size = UDim2.new(1, 0, 0, 8)
-dividerLayout.BackgroundTransparency = 1
-dividerLayout.LayoutOrder = 8
-dividerLayout.Parent = content
+local divider1Spacer = Instance.new("Frame")
+divider1Spacer.Size = UDim2.new(1, 0, 0, 4)
+divider1Spacer.BackgroundTransparency = 1
+divider1Spacer.LayoutOrder = 8
+divider1Spacer.Parent = content
+
+-- ── Game Pass Scanner ──
+sectionLabel("GAME PASSES", 9)
+
+local scanBtn = makeButton("🔍  Scan Passes", colors.surface, 10, 30)
+scanBtn.TextSize = 11
+scanBtn.TextColor3 = colors.accent
+
+-- Scrollable results container
+local passScrollFrame = Instance.new("ScrollingFrame")
+passScrollFrame.Name = "PassResults"
+passScrollFrame.Size = UDim2.new(1, 0, 0, 0) -- hidden initially
+passScrollFrame.BackgroundColor3 = colors.surface
+passScrollFrame.BackgroundTransparency = 0.5
+passScrollFrame.BorderSizePixel = 0
+passScrollFrame.ScrollBarThickness = 3
+passScrollFrame.ScrollBarImageColor3 = colors.accent
+passScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+passScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+passScrollFrame.LayoutOrder = 11
+passScrollFrame.Visible = false
+passScrollFrame.Parent = content
+addCorner(passScrollFrame, 6)
+
+local passListLayout = Instance.new("UIListLayout")
+passListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+passListLayout.Padding = UDim.new(0, 2)
+passListLayout.Parent = passScrollFrame
+
+local passListPadding = Instance.new("UIPadding")
+passListPadding.PaddingTop = UDim.new(0, 4)
+passListPadding.PaddingBottom = UDim.new(0, 4)
+passListPadding.PaddingLeft = UDim.new(0, 6)
+passListPadding.PaddingRight = UDim.new(0, 6)
+passListPadding.Parent = passScrollFrame
+
+local passesLoaded = false
+
+local function clearPassResults()
+	for _, child in ipairs(passScrollFrame:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+end
+
+local function addPassRow(name, price, owned, order)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 28)
+	row.BackgroundColor3 = colors.bg
+	row.BackgroundTransparency = 0.3
+	row.BorderSizePixel = 0
+	row.LayoutOrder = order
+	row.Parent = passScrollFrame
+	addCorner(row, 4)
+
+	-- Owned indicator dot
+	local ownDot = Instance.new("Frame")
+	ownDot.Size = UDim2.new(0, 5, 0, 5)
+	ownDot.Position = UDim2.new(0, 4, 0.5, -2)
+	ownDot.BackgroundColor3 = owned and colors.green or colors.red
+	ownDot.BorderSizePixel = 0
+	ownDot.Parent = row
+	addCorner(ownDot, 3)
+
+	-- Pass name
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, -60, 1, 0)
+	nameLabel.Position = UDim2.new(0, 14, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = name
+	nameLabel.TextColor3 = colors.textPrimary
+	nameLabel.Font = Enum.Font.Gotham
+	nameLabel.TextSize = 10
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLabel.Parent = row
+
+	-- Price / Owned label
+	local priceLabel = Instance.new("TextLabel")
+	priceLabel.Size = UDim2.new(0, 48, 1, 0)
+	priceLabel.Position = UDim2.new(1, -52, 0, 0)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.Text = owned and "✓" or ("R$" .. tostring(price))
+	priceLabel.TextColor3 = owned and colors.green or colors.orange
+	priceLabel.Font = Enum.Font.GothamBold
+	priceLabel.TextSize = 10
+	priceLabel.TextXAlignment = Enum.TextXAlignment.Right
+	priceLabel.Parent = row
+
+	return row
+end
+
+local function scanGamePasses()
+	clearPassResults()
+	passesLoaded = false
+	scanBtn.Text = "⏳  Scanning..."
+	notify("Scanning passes...", colors.accent, 2)
+
+	task.spawn(function()
+		local success, passes = pcall(function()
+			local placeId = game.PlaceId
+			local LocalPlayer = Players.LocalPlayer
+			local results = {}
+
+			-- Fetch game passes via Roblox API
+			local cursor = ""
+			local pageCount = 0
+			repeat
+				local url = "https://games.roblox.com/v1/games/" .. tostring(game.GameId) .. "/game-passes?limit=100&sortOrder=Asc"
+				if cursor ~= "" then
+					url = url .. "&cursor=" .. cursor
+				end
+
+				local response = game:HttpGet(url)
+				local data = HttpService:JSONDecode(response)
+
+				if data and data.data then
+					for _, pass in ipairs(data.data) do
+						local owned = false
+						pcall(function()
+							owned = MarketplaceService:UserOwnsGamePassAsync(LocalPlayer.UserId, pass.id)
+						end)
+
+						table.insert(results, {
+							name = pass.name or "Unknown",
+							price = pass.price or 0,
+							owned = owned,
+							id = pass.id,
+						})
+					end
+				end
+
+				cursor = (data and data.nextPageCursor) or ""
+				pageCount = pageCount + 1
+			until cursor == "" or cursor == nil or pageCount >= 5
+
+			return results
+		end)
+
+		if success and passes and #passes > 0 then
+			for i, pass in ipairs(passes) do
+				addPassRow(pass.name, pass.price, pass.owned, i)
+			end
+
+			-- Show scroll frame with max height
+			local rowCount = math.min(#passes, 5)
+			local scrollHeight = rowCount * 30 + 8
+			passScrollFrame.Size = UDim2.new(1, 0, 0, scrollHeight)
+			passScrollFrame.Visible = true
+			passesLoaded = true
+
+			-- Resize main frame
+			local newHeight = mainFrame.Size.Y.Offset + scrollHeight + 6
+			tween(mainFrame, {Size = UDim2.new(0, 240, 0, newHeight)}, 0.3)
+
+			scanBtn.Text = "🔍  " .. tostring(#passes) .. " Passes Found"
+			notify(tostring(#passes) .. " passes found", colors.green, 2)
+		elseif success and passes and #passes == 0 then
+			scanBtn.Text = "🔍  No Passes Found"
+			notify("No passes in this game", colors.textMuted, 2)
+		else
+			scanBtn.Text = "🔍  Scan Failed"
+			notify("Scan failed — retry", colors.red, 2)
+		end
+
+		-- Reset button text after delay
+		task.wait(3)
+		scanBtn.Text = passesLoaded and ("🔍  " .. "Rescan Passes") or "🔍  Scan Passes"
+	end)
+end
+
+scanBtn.MouseButton1Click:Connect(scanGamePasses)
+
+-- ── Divider 2 ──
+local divider2 = Instance.new("Frame")
+divider2.Size = UDim2.new(0.8, 0, 0, 1)
+divider2.BackgroundColor3 = colors.divider
+divider2.BorderSizePixel = 0
+divider2.LayoutOrder = 12
+divider2.Parent = content
+
+local divider2Spacer = Instance.new("Frame")
+divider2Spacer.Size = UDim2.new(1, 0, 0, 4)
+divider2Spacer.BackgroundTransparency = 1
+divider2Spacer.LayoutOrder = 12
+divider2Spacer.Parent = content
 
 -- ── Unload Button ──
-local unloadBtn = makeButton("⏻  Unload Script", colors.surface, 9, 32)
+local unloadBtn = makeButton("⏻  Unload Script", colors.surface, 13, 32)
 unloadBtn.TextSize = 12
 unloadBtn.TextColor3 = colors.red
 
@@ -554,11 +742,11 @@ unloadBtn.TextColor3 = colors.red
 local creditLabel = Instance.new("TextLabel")
 creditLabel.Size = UDim2.new(1, 0, 0, 16)
 creditLabel.BackgroundTransparency = 1
-creditLabel.Text = "by Antigravity  ·  v2.1"
+creditLabel.Text = "by Antigravity  ·  v2.2"
 creditLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
 creditLabel.Font = Enum.Font.Gotham
 creditLabel.TextSize = 10
-creditLabel.LayoutOrder = 10
+creditLabel.LayoutOrder = 14
 creditLabel.Parent = content
 
 -- ── Finalize main frame height ──
@@ -567,11 +755,13 @@ local totalHeight = 40 -- title bar
 	+ 16 + 38 -- clicker section
 	+ 16 + 32 -- interval section
 	+ 16 + 30 + 30 -- keybinds section
-	+ 8       -- divider spacer
+	+ 8       -- divider 1
+	+ 16 + 30 -- game pass section
+	+ 8       -- divider 2
 	+ 32      -- unload
 	+ 16      -- credit
-	+ (6 * 10) -- spacing between items
-totalHeight = math.max(totalHeight, 310) -- minimum
+	+ (6 * 14) -- spacing between items
+totalHeight = math.max(totalHeight, 380) -- minimum
 mainFrame.Size = UDim2.new(0, 240, 0, totalHeight)
 
 -- ═══════════════════════════════════════════════════════════
