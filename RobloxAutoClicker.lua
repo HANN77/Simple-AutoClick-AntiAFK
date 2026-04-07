@@ -20,6 +20,10 @@ local existingGui = CoreGui:FindFirstChild(guiName)
 if existingGui then
 	existingGui:Destroy()
 end
+local existingNotifGui = CoreGui:FindFirstChild(guiName .. "_Notifs")
+if existingNotifGui then
+	existingNotifGui:Destroy()
+end
 
 -- ═══════════════════════════════════════════════════════════
 -- State
@@ -109,25 +113,32 @@ end
 -- ═══════════════════════════════════════════════════════════
 -- Toast Notification System
 -- ═══════════════════════════════════════════════════════════
-local notificationContainer  -- will be created after gui exists
 local activeToasts = {}
 
-local function createNotificationContainer(parent)
-	local container = Instance.new("Frame")
-	container.Name = "Notifications"
-	container.Size = UDim2.new(0, 220, 1, 0)
-	container.Position = UDim2.new(1, -230, 0, 10)
-	container.BackgroundTransparency = 1
-	container.Parent = parent
+-- Separate ScreenGui for notifications so they show even when main UI is hidden
+local notifGui = Instance.new("ScreenGui")
+notifGui.Name = guiName .. "_Notifs"
+notifGui.ResetOnSpawn = false
+notifGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function()
+	if typeof(syn) == "table" and syn.protect_gui then
+		syn.protect_gui(notifGui)
+	end
+end)
+notifGui.Parent = CoreGui
 
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 6)
-	listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-	listLayout.Parent = container
+local notificationContainer = Instance.new("Frame")
+notificationContainer.Name = "Notifications"
+notificationContainer.Size = UDim2.new(0, 220, 1, 0)
+notificationContainer.Position = UDim2.new(1, -230, 0, 10)
+notificationContainer.BackgroundTransparency = 1
+notificationContainer.Parent = notifGui
 
-	return container
-end
+local notifListLayout = Instance.new("UIListLayout")
+notifListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+notifListLayout.Padding = UDim.new(0, 6)
+notifListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+notifListLayout.Parent = notificationContainer
 
 local function notify(message, accentColor, duration)
 	if not notificationContainer then return end
@@ -223,8 +234,7 @@ pcall(function()
 end)
 gui.Parent = CoreGui
 
--- Create notification container (lives in the ScreenGui, independent of mainFrame)
-notificationContainer = createNotificationContainer(gui)
+-- Notification container already created above (in its own ScreenGui)
 
 -- ── Main container ──
 local mainFrame = Instance.new("Frame")
@@ -714,6 +724,13 @@ local function unloadScript()
 
 	task.wait(0.35)
 	gui:Destroy()
+
+	-- Clean up notification gui after toasts finish
+	task.delay(2, function()
+		if notifGui and notifGui.Parent then
+			notifGui:Destroy()
+		end
+	end)
 end
 
 unloadBtn.MouseButton1Click:Connect(unloadScript)
