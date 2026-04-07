@@ -111,9 +111,8 @@ local function keyName(keyCode)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- Toast Notification System
+-- Toast Notification System (single toast, overwrites itself)
 -- ═══════════════════════════════════════════════════════════
-local activeToasts = {}
 
 -- Separate ScreenGui for notifications so they show even when main UI is hidden
 local notifGui = Instance.new("ScreenGui")
@@ -130,96 +129,81 @@ pcall(function()
 end)
 notifGui.Parent = CoreGui
 
-local notificationContainer = Instance.new("Frame")
-notificationContainer.Name = "Notifications"
-notificationContainer.Size = UDim2.new(0, 220, 1, 0)
-notificationContainer.Position = UDim2.new(1, -230, 0, 10)
-notificationContainer.BackgroundTransparency = 1
-notificationContainer.Parent = notifGui
+-- Single toast pill — reused every time
+local toast = Instance.new("Frame")
+toast.Name = "Toast"
+toast.Size = UDim2.new(0, 180, 0, 26)
+toast.Position = UDim2.new(1, -190, 0, 12)
+toast.BackgroundColor3 = colors.bg
+toast.BackgroundTransparency = 1
+toast.BorderSizePixel = 0
+toast.ClipsDescendants = true
+toast.Visible = false
+toast.Parent = notifGui
+addCorner(toast, 6)
+addStroke(toast, colors.divider, 1)
 
-local notifListLayout = Instance.new("UIListLayout")
-notifListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-notifListLayout.Padding = UDim.new(0, 6)
-notifListLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-notifListLayout.Parent = notificationContainer
+-- Accent dot
+local dot = Instance.new("Frame")
+dot.Name = "Dot"
+dot.Size = UDim2.new(0, 6, 0, 6)
+dot.Position = UDim2.new(0, 8, 0.5, -3)
+dot.BackgroundColor3 = colors.accent
+dot.BorderSizePixel = 0
+dot.Parent = toast
+addCorner(dot, 3)
+
+-- Message label
+local toastLabel = Instance.new("TextLabel")
+toastLabel.Name = "Msg"
+toastLabel.Size = UDim2.new(1, -24, 1, 0)
+toastLabel.Position = UDim2.new(0, 20, 0, 0)
+toastLabel.BackgroundTransparency = 1
+toastLabel.Text = ""
+toastLabel.TextColor3 = colors.textPrimary
+toastLabel.Font = Enum.Font.Gotham
+toastLabel.TextSize = 11
+toastLabel.TextXAlignment = Enum.TextXAlignment.Left
+toastLabel.TextTruncate = Enum.TextTruncate.AtEnd
+toastLabel.Parent = toast
+
+local notifDismissThread = nil
 
 local function notify(message, accentColor, duration)
-	if not notificationContainer then return end
 	if not running then return end
 
 	accentColor = accentColor or colors.accent
-	duration = duration or 2.5
+	duration = duration or 2
 
-	-- Toast frame
-	local toast = Instance.new("Frame")
-	toast.Name = "Toast"
-	toast.Size = UDim2.new(1, 0, 0, 36)
-	toast.BackgroundColor3 = colors.bg
-	toast.BackgroundTransparency = 0.1
-	toast.BorderSizePixel = 0
-	toast.ClipsDescendants = true
-	toast.LayoutOrder = tick() -- stack newest at bottom
-	toast.Parent = notificationContainer
-	addCorner(toast, 8)
-	addStroke(toast, colors.divider, 1)
+	-- Cancel previous dismiss timer
+	if notifDismissThread then
+		pcall(function() task.cancel(notifDismissThread) end)
+		notifDismissThread = nil
+	end
 
-	-- Colored accent bar on the left
-	local bar = Instance.new("Frame")
-	bar.Name = "AccentBar"
-	bar.Size = UDim2.new(0, 3, 1, -8)
-	bar.Position = UDim2.new(0, 5, 0, 4)
-	bar.BackgroundColor3 = accentColor
-	bar.BorderSizePixel = 0
-	bar.Parent = toast
-	addCorner(bar, 2)
+	-- Update content
+	toastLabel.Text = message
+	dot.BackgroundColor3 = accentColor
+	toast.Visible = true
 
-	-- Message text
-	local msg = Instance.new("TextLabel")
-	msg.Size = UDim2.new(1, -20, 1, 0)
-	msg.Position = UDim2.new(0, 16, 0, 0)
-	msg.BackgroundTransparency = 1
-	msg.Text = message
-	msg.TextColor3 = colors.textPrimary
-	msg.Font = Enum.Font.GothamBold
-	msg.TextSize = 11
-	msg.TextXAlignment = Enum.TextXAlignment.Left
-	msg.TextWrapped = true
-	msg.Parent = toast
+	-- Slide in
+	toast.Position = UDim2.new(1, 20, 0, 12)
+	toast.BackgroundTransparency = 0.5
+	toastLabel.TextTransparency = 0.5
+	dot.BackgroundTransparency = 0.5
 
-	-- Slide in from right
-	local targetPos = toast.Position
-	toast.Position = UDim2.new(1, 50, 0, 0)
-	toast.BackgroundTransparency = 0.6
-	msg.TextTransparency = 0.6
+	tween(toast, {Position = UDim2.new(1, -190, 0, 12), BackgroundTransparency = 0.05}, 0.25, Enum.EasingStyle.Quint)
+	tween(toastLabel, {TextTransparency = 0}, 0.2)
+	tween(dot, {BackgroundTransparency = 0}, 0.2)
 
-	tween(toast, {Position = targetPos, BackgroundTransparency = 0.1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	tween(msg, {TextTransparency = 0}, 0.3)
-
-	-- Track it
-	table.insert(activeToasts, toast)
-
-	-- Auto dismiss
-	task.spawn(function()
-		task.wait(duration)
-		if not toast.Parent then return end
-
-		-- Fade out + slide right
-		tween(toast, {Position = UDim2.new(1, 50, 0, 0), BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Quint)
-		tween(msg, {TextTransparency = 1}, 0.25)
-		tween(bar, {BackgroundTransparency = 1}, 0.25)
-
-		task.wait(0.35)
-		if toast.Parent then
-			toast:Destroy()
-		end
-
-		-- Remove from tracking
-		for i, t in ipairs(activeToasts) do
-			if t == toast then
-				table.remove(activeToasts, i)
-				break
-			end
-		end
+	-- Schedule dismiss
+	notifDismissThread = task.delay(duration, function()
+		tween(toast, {Position = UDim2.new(1, 20, 0, 12), BackgroundTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
+		tween(toastLabel, {TextTransparency = 1}, 0.2)
+		tween(dot, {BackgroundTransparency = 1}, 0.2)
+		task.wait(0.3)
+		toast.Visible = false
+		notifDismissThread = nil
 	end)
 end
 
