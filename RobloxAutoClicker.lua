@@ -119,7 +119,10 @@ local activeToasts = {}
 local notifGui = Instance.new("ScreenGui")
 notifGui.Name = guiName .. "_Notifs"
 notifGui.ResetOnSpawn = false
+notifGui.DisplayOrder = 999
+notifGui.IgnoreGuiInset = true
 notifGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+notifGui.Enabled = true
 pcall(function()
 	if typeof(syn) == "table" and syn.protect_gui then
 		syn.protect_gui(notifGui)
@@ -653,9 +656,10 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, ga
 		toggleAutoClicker()
 	elseif input.KeyCode == keybinds.hide then
 		gui.Enabled = not gui.Enabled
-		-- Note: notification won't show when UI is hidden, but will show when unhidden
 		if gui.Enabled then
 			notify("UI Visible", colors.accent, 1.5)
+		else
+			notify("UI Hidden", colors.textMuted, 1.5)
 		end
 	end
 end))
