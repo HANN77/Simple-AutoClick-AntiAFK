@@ -1,5 +1,5 @@
 -- Simple Auto Clicker By Antigravity
--- Enhanced Edition v2.0
+-- Enhanced Edition v2.1
 
 -- ═══════════════════════════════════════════════════════════
 -- Services
@@ -107,6 +107,109 @@ local function keyName(keyCode)
 end
 
 -- ═══════════════════════════════════════════════════════════
+-- Toast Notification System
+-- ═══════════════════════════════════════════════════════════
+local notificationContainer  -- will be created after gui exists
+local activeToasts = {}
+
+local function createNotificationContainer(parent)
+	local container = Instance.new("Frame")
+	container.Name = "Notifications"
+	container.Size = UDim2.new(0, 220, 1, 0)
+	container.Position = UDim2.new(1, -230, 0, 10)
+	container.BackgroundTransparency = 1
+	container.Parent = parent
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 6)
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	listLayout.Parent = container
+
+	return container
+end
+
+local function notify(message, accentColor, duration)
+	if not notificationContainer then return end
+	if not running then return end
+
+	accentColor = accentColor or colors.accent
+	duration = duration or 2.5
+
+	-- Toast frame
+	local toast = Instance.new("Frame")
+	toast.Name = "Toast"
+	toast.Size = UDim2.new(1, 0, 0, 36)
+	toast.BackgroundColor3 = colors.bg
+	toast.BackgroundTransparency = 0.1
+	toast.BorderSizePixel = 0
+	toast.ClipsDescendants = true
+	toast.LayoutOrder = tick() -- stack newest at bottom
+	toast.Parent = notificationContainer
+	addCorner(toast, 8)
+	addStroke(toast, colors.divider, 1)
+
+	-- Colored accent bar on the left
+	local bar = Instance.new("Frame")
+	bar.Name = "AccentBar"
+	bar.Size = UDim2.new(0, 3, 1, -8)
+	bar.Position = UDim2.new(0, 5, 0, 4)
+	bar.BackgroundColor3 = accentColor
+	bar.BorderSizePixel = 0
+	bar.Parent = toast
+	addCorner(bar, 2)
+
+	-- Message text
+	local msg = Instance.new("TextLabel")
+	msg.Size = UDim2.new(1, -20, 1, 0)
+	msg.Position = UDim2.new(0, 16, 0, 0)
+	msg.BackgroundTransparency = 1
+	msg.Text = message
+	msg.TextColor3 = colors.textPrimary
+	msg.Font = Enum.Font.GothamBold
+	msg.TextSize = 11
+	msg.TextXAlignment = Enum.TextXAlignment.Left
+	msg.TextWrapped = true
+	msg.Parent = toast
+
+	-- Slide in from right
+	local targetPos = toast.Position
+	toast.Position = UDim2.new(1, 50, 0, 0)
+	toast.BackgroundTransparency = 0.6
+	msg.TextTransparency = 0.6
+
+	tween(toast, {Position = targetPos, BackgroundTransparency = 0.1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tween(msg, {TextTransparency = 0}, 0.3)
+
+	-- Track it
+	table.insert(activeToasts, toast)
+
+	-- Auto dismiss
+	task.spawn(function()
+		task.wait(duration)
+		if not toast.Parent then return end
+
+		-- Fade out + slide right
+		tween(toast, {Position = UDim2.new(1, 50, 0, 0), BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Quint)
+		tween(msg, {TextTransparency = 1}, 0.25)
+		tween(bar, {BackgroundTransparency = 1}, 0.25)
+
+		task.wait(0.35)
+		if toast.Parent then
+			toast:Destroy()
+		end
+
+		-- Remove from tracking
+		for i, t in ipairs(activeToasts) do
+			if t == toast then
+				table.remove(activeToasts, i)
+				break
+			end
+		end
+	end)
+end
+
+-- ═══════════════════════════════════════════════════════════
 -- GUI Construction
 -- ═══════════════════════════════════════════════════════════
 local gui = Instance.new("ScreenGui")
@@ -119,6 +222,9 @@ pcall(function()
 	end
 end)
 gui.Parent = CoreGui
+
+-- Create notification container (lives in the ScreenGui, independent of mainFrame)
+notificationContainer = createNotificationContainer(gui)
 
 -- ── Main container ──
 local mainFrame = Instance.new("Frame")
@@ -338,9 +444,11 @@ end
 
 minusBtn.MouseButton1Click:Connect(function()
 	setInterval(interval - (interval > 1 and 1 or 0.1))
+	notify("Interval: " .. tostring(interval) .. "s", colors.accent, 1.5)
 end)
 plusBtn.MouseButton1Click:Connect(function()
 	setInterval(interval + (interval >= 1 and 1 or 0.1))
+	notify("Interval: " .. tostring(interval) .. "s", colors.accent, 1.5)
 end)
 intervalBox.FocusLost:Connect(function()
 	local val = tonumber(intervalBox.Text)
@@ -413,6 +521,7 @@ local function makeKeybindRow(label, bindKey, order)
 			tween(btn, {BackgroundColor3 = colors.surface}, 0.15)
 			waitingForBind = nil
 			bindConn:Disconnect()
+			notify(label .. " → [ " .. keyName(input.KeyCode) .. " ]", colors.orange, 2)
 		end)
 	end)
 
@@ -446,7 +555,7 @@ unloadBtn.TextColor3 = colors.red
 local creditLabel = Instance.new("TextLabel")
 creditLabel.Size = UDim2.new(1, 0, 0, 16)
 creditLabel.BackgroundTransparency = 1
-creditLabel.Text = "by Antigravity  ·  v2.0"
+creditLabel.Text = "by Antigravity  ·  v2.1"
 creditLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
 creditLabel.Font = Enum.Font.Gotham
 creditLabel.TextSize = 10
@@ -508,6 +617,11 @@ end))
 local function toggleAutoClicker()
 	isEnabled = not isEnabled
 	updateToggleVisuals()
+	if isEnabled then
+		notify("Auto-Clicker Started  ✓", colors.green)
+	else
+		notify("Auto-Clicker Stopped  ✗", colors.red)
+	end
 end
 
 toggleBtn.MouseButton1Click:Connect(toggleAutoClicker)
@@ -529,6 +643,10 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, ga
 		toggleAutoClicker()
 	elseif input.KeyCode == keybinds.hide then
 		gui.Enabled = not gui.Enabled
+		-- Note: notification won't show when UI is hidden, but will show when unhidden
+		if gui.Enabled then
+			notify("UI Visible", colors.accent, 1.5)
+		end
 	end
 end))
 
@@ -568,6 +686,10 @@ end
 -- Unload — clean teardown
 -- ═══════════════════════════════════════════════════════════
 local function unloadScript()
+	-- Show farewell notification before teardown
+	notify("Script Unloaded  — Goodbye!", colors.red, 1.5)
+	task.wait(0.4)
+
 	running = false
 	isEnabled = false
 
@@ -608,4 +730,8 @@ do
 		Position = targetPos,
 		BackgroundTransparency = 0,
 	}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	-- Welcome notification
+	task.wait(0.4)
+	notify("⚡ AutoClicker v2.1 Loaded", colors.accent, 3)
 end
