@@ -167,7 +167,7 @@ toastLabel.TextXAlignment = Enum.TextXAlignment.Left
 toastLabel.TextTruncate = Enum.TextTruncate.AtEnd
 toastLabel.Parent = toast
 
-local notifDismissThread = nil
+local notifVersion = 0
 
 local function notify(message, accentColor, duration)
 	if not running then return end
@@ -175,13 +175,11 @@ local function notify(message, accentColor, duration)
 	accentColor = accentColor or colors.accent
 	duration = duration or 2
 
-	-- Cancel previous dismiss timer
-	if notifDismissThread then
-		pcall(function() task.cancel(notifDismissThread) end)
-		notifDismissThread = nil
-	end
+	-- Bump version so any previous dismiss thread becomes stale
+	notifVersion = notifVersion + 1
+	local myVersion = notifVersion
 
-	-- Update content
+	-- Update content in-place (single toast, no new instances)
 	toastLabel.Text = message
 	dot.BackgroundColor3 = accentColor
 	toast.Visible = true
@@ -196,14 +194,18 @@ local function notify(message, accentColor, duration)
 	tween(toastLabel, {TextTransparency = 0}, 0.2)
 	tween(dot, {BackgroundTransparency = 0}, 0.2)
 
-	-- Schedule dismiss
-	notifDismissThread = task.delay(duration, function()
+	-- Schedule dismiss — only runs if no newer notification replaced this one
+	task.spawn(function()
+		task.wait(duration)
+		if myVersion ~= notifVersion then return end -- a newer notify() was called, abort
+
 		tween(toast, {Position = UDim2.new(1, 20, 0, 12), BackgroundTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
 		tween(toastLabel, {TextTransparency = 1}, 0.2)
 		tween(dot, {BackgroundTransparency = 1}, 0.2)
 		task.wait(0.3)
-		toast.Visible = false
-		notifDismissThread = nil
+		if myVersion == notifVersion then
+			toast.Visible = false
+		end
 	end)
 end
 
