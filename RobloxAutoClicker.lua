@@ -48,7 +48,7 @@ local unloading = false       -- Prevents race conditions during teardown
 -- Keybind state (defaults)
 local keybinds = {
 	toggle = Enum.KeyCode.F,
-	hide   = Enum.KeyCode.LeftShift,
+	hide   = Enum.KeyCode.RightShift,
 }
 local waitingForBind = nil    -- "toggle" or "hide" when listening
 
