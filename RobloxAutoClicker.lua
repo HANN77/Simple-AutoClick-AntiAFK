@@ -1,4 +1,4 @@
--- Simple Auto Clicker By Antigravity
+-- Simple Auto Clicker By FusedHann
 -- Enhanced Edition v2.2
 
 local SCRIPT_VERSION = "2.2"
@@ -603,7 +603,7 @@ unloadBtn.TextColor3 = colors.red
 local creditLabel = Instance.new("TextLabel")
 creditLabel.Size = UDim2.new(1, 0, 0, 16)
 creditLabel.BackgroundTransparency = 1
-creditLabel.Text = "by Antigravity  ·  v" .. SCRIPT_VERSION
+creditLabel.Text = "by FusedHann  ·  v" .. SCRIPT_VERSION
 creditLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
 creditLabel.Font = Enum.Font.Gotham
 creditLabel.TextSize = 10
