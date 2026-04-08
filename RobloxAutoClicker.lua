@@ -7,10 +7,19 @@
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local VirtualUser = game:GetService("VirtualUser")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+
+-- Safe service access — these services may not exist on all executors
+local VirtualInputManager
+pcall(function()
+	VirtualInputManager = game:GetService("VirtualInputManager")
+end)
+
+local VirtualUser
+pcall(function()
+	VirtualUser = game:GetService("VirtualUser")
+end)
 
 -- ═══════════════════════════════════════════════════════════
 -- Cleanup previous instance
@@ -32,6 +41,7 @@ local isEnabled = false
 local interval = 5
 local connections = {}        -- Track all connections for clean unload
 local running = true          -- Master kill switch for loops
+local unloading = false       -- Prevents race conditions during teardown
 
 -- Keybind state (defaults)
 local keybinds = {
@@ -57,6 +67,39 @@ local colors = {
 	textMuted    = Color3.fromRGB(140, 140, 165),
 	divider      = Color3.fromRGB(50, 50, 70),
 }
+
+-- ═══════════════════════════════════════════════════════════
+-- Safe Click Helper (tries multiple methods, never crashes)
+-- ═══════════════════════════════════════════════════════════
+local function safeClick()
+	-- Method 1: VirtualInputManager (preferred — works background)
+	if VirtualInputManager then
+		local ok = pcall(function()
+			local cam = workspace.CurrentCamera
+			if cam then
+				local center = cam.ViewportSize / 2
+				VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 1)
+				task.wait(0.02)
+				VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 1)
+			end
+		end)
+		if ok then return end
+	end
+
+	-- Method 2: mouse1click (common executor function)
+	if typeof(mouse1click) == "function" then
+		pcall(mouse1click)
+		return
+	end
+
+	-- Method 3: VirtualUser click (last resort)
+	if VirtualUser then
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	end
+end
 
 -- ═══════════════════════════════════════════════════════════
 -- Helpers
@@ -170,7 +213,7 @@ toastLabel.Parent = toast
 local notifVersion = 0
 
 local function notify(message, accentColor, duration)
-	if not running then return end
+	if not running and not unloading then return end
 
 	accentColor = accentColor or colors.accent
 	duration = duration or 2
@@ -199,13 +242,17 @@ local function notify(message, accentColor, duration)
 		task.wait(duration)
 		if myVersion ~= notifVersion then return end -- a newer notify() was called, abort
 
-		tween(toast, {Position = UDim2.new(1, 20, 0, 12), BackgroundTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
-		tween(toastLabel, {TextTransparency = 1}, 0.2)
-		tween(dot, {BackgroundTransparency = 1}, 0.2)
-		task.wait(0.3)
-		if myVersion == notifVersion then
-			toast.Visible = false
-		end
+		-- Safety: check objects still exist (could be destroyed during unload)
+		pcall(function()
+			if not toast or not toast.Parent then return end
+			tween(toast, {Position = UDim2.new(1, 20, 0, 12), BackgroundTransparency = 1}, 0.25, Enum.EasingStyle.Quint)
+			tween(toastLabel, {TextTransparency = 1}, 0.2)
+			tween(dot, {BackgroundTransparency = 1}, 0.2)
+			task.wait(0.3)
+			if myVersion == notifVersion and toast and toast.Parent then
+				toast.Visible = false
+			end
+		end)
 	end)
 end
 
@@ -655,17 +702,18 @@ end))
 -- ═══════════════════════════════════════════════════════════
 task.spawn(function()
 	while running do
-		if isEnabled then
-			local cam = workspace.CurrentCamera
-			if cam then
-				local center = cam.ViewportSize / 2
-				VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 1)
-				task.wait(0.02)
-				VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 1)
+		local ok, err = pcall(function()
+			if isEnabled then
+				safeClick()
+				task.wait(math.max(interval, 0.05)) -- floor at 50ms to prevent freeze
+			else
+				task.wait(0.1)
 			end
-			task.wait(interval)
-		else
-			task.wait(0.1)
+		end)
+		if not ok then
+			-- If anything errors, wait a bit and retry instead of dying
+			warn("[AutoClicker] Loop error: " .. tostring(err))
+			task.wait(1)
 		end
 	end
 end)
@@ -674,11 +722,13 @@ end)
 -- Anti-AFK Hook
 -- ═══════════════════════════════════════════════════════════
 local LocalPlayer = Players.LocalPlayer
-if LocalPlayer then
+if LocalPlayer and VirtualUser then
 	table.insert(connections, LocalPlayer.Idled:Connect(function()
 		if not running then return end
-		VirtualUser:CaptureController()
-		VirtualUser:ClickButton2(Vector2.new())
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
 	end))
 end
 
@@ -686,6 +736,9 @@ end
 -- Unload — clean teardown
 -- ═══════════════════════════════════════════════════════════
 local function unloadScript()
+	if unloading then return end  -- prevent double-unload crash
+	unloading = true
+
 	-- Show farewell notification before teardown
 	notify("Script Unloaded  — Goodbye!", colors.red, 1.5)
 	task.wait(0.4)
