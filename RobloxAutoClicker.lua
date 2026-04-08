@@ -1,5 +1,7 @@
 -- Simple Auto Clicker By Antigravity
--- Enhanced Edition v2.1
+-- Enhanced Edition v2.2
+
+local SCRIPT_VERSION = "2.2"
 
 -- ═══════════════════════════════════════════════════════════
 -- Services
@@ -328,7 +330,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -70, 1, 0)
 titleLabel.Position = UDim2.new(0, 12, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "⚡ AutoClicker"
+titleLabel.Text = "⚡ AutoClicker v" .. SCRIPT_VERSION
 titleLabel.TextColor3 = colors.textPrimary
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 14
@@ -601,7 +603,7 @@ unloadBtn.TextColor3 = colors.red
 local creditLabel = Instance.new("TextLabel")
 creditLabel.Size = UDim2.new(1, 0, 0, 16)
 creditLabel.BackgroundTransparency = 1
-creditLabel.Text = "by Antigravity  ·  v2.1"
+creditLabel.Text = "by Antigravity  ·  v" .. SCRIPT_VERSION
 creditLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
 creditLabel.Font = Enum.Font.Gotham
 creditLabel.TextSize = 10
@@ -793,5 +795,5 @@ do
 
 	-- Welcome notification
 	task.wait(0.4)
-	notify("⚡ AutoClicker v2.1 Loaded", colors.accent, 3)
+	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Loaded", colors.accent, 3)
 end
