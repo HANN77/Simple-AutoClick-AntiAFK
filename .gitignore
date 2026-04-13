@@ -1,2 +1,3 @@
-# Private webhook config — contains your Discord URL, never push this!
-WebhookConfig.lua
+# Settings are auto-saved to executor workspace as SimpleAFK_v2.json
+# That file lives on your local machine only, never in this repo.
+SimpleAFK_v2.json

@@ -3,12 +3,6 @@
 
 local SCRIPT_VERSION = "2.2"
 
--- ═══════════════════════════════════════════════════════════
--- Webhook Config  (fill these in once for auto-execute use)
--- ═══════════════════════════════════════════════════════════
-local DEFAULT_WEBHOOK_URL   = ""    -- paste your Discord webhook URL between the quotes
-local AUTO_START_WEBHOOK    = false  -- set true to auto-enable webhook on load
-local DEFAULT_HEARTBEAT_MIN = 5      -- how often (minutes) to send a heartbeat
 
 -- ═══════════════════════════════════════════════════════════
 -- Services
@@ -61,9 +55,9 @@ local keybinds = {
 local waitingForBind = nil    -- "toggle" or "hide" when listening
 
 -- Webhook state
-local webhookUrl           = DEFAULT_WEBHOOK_URL
+local webhookUrl           = ""
 local webhookEnabled       = false
-local webhookHeartbeatMins = DEFAULT_HEARTBEAT_MIN
+local webhookHeartbeatMins = 5
 local sessionStart         = tick()   -- for session-duration reporting
 
 -- Discord embed colours (decimal RGB)
@@ -169,6 +163,25 @@ local function formatDuration(secs)
 	if h > 0 then return string.format("%dh %dm", h, m)
 	elseif m > 0 then return string.format("%dm %ds", m, s)
 	else return string.format("%ds", s) end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- Persistent Settings  (auto-save to executor workspace)
+-- ═══════════════════════════════════════════════════════════
+local CONFIG_FILE = "SimpleAFK_v2.json"
+
+local function saveSettings()
+	pcall(function()
+		if typeof(writefile) ~= "function" then return end
+		writefile(CONFIG_FILE, HttpService:JSONEncode({
+			interval             = interval,
+			webhookUrl           = webhookUrl,
+			webhookEnabled       = webhookEnabled,
+			webhookHeartbeatMins = webhookHeartbeatMins,
+			toggleKey            = keybinds.toggle.Name,
+			hideKey              = keybinds.hide.Name,
+		}))
+	end)
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -556,6 +569,7 @@ local function setInterval(val)
 	val = math.clamp(math.floor(val * 10 + 0.5) / 10, 0.1, 999) -- 1 decimal, min 0.1
 	interval = val
 	intervalBox.Text = tostring(val)
+	saveSettings()
 end
 
 minusBtn.MouseButton1Click:Connect(function()
@@ -638,6 +652,7 @@ local function makeKeybindRow(label, bindKey, order)
 			waitingForBind = nil
 			bindConn:Disconnect()
 			notify(label .. " → [ " .. keyName(input.KeyCode) .. " ]", colors.orange, 2)
+			saveSettings()
 		end)
 	end)
 
@@ -683,6 +698,7 @@ webhookToggleBtn.MouseButton1Click:Connect(function()
 	else
 		notify("Webhook Disabled", colors.textMuted, 2)
 	end
+	saveSettings()
 end)
 
 -- Webhook URL text box
@@ -711,6 +727,7 @@ urlBox.FocusLost:Connect(function()
 	elseif webhookUrl ~= "" then
 		notify("Webhook URL saved  ✓", colors.accent, 1.5)
 	end
+	saveSettings()
 end)
 
 -- Heartbeat interval row
@@ -762,6 +779,7 @@ local function setHbInterval(val)
 	val = math.clamp(math.floor(val), 1, 60)
 	webhookHeartbeatMins = val
 	hbBox.Text = tostring(val)
+	saveSettings()
 end
 
 hbMinus.MouseButton1Click:Connect(function()
@@ -1012,42 +1030,58 @@ do
 	task.wait(0.4)
 	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Running  ✓", colors.green, 3)
 
-	-- ── Read from WebhookConfig.lua (if it's in auto-execute too) ──
-	-- Give the executor a moment to finish running both scripts.
-	task.wait(0.5)
+	-- ── Load saved settings (webhook URL, interval, keybinds) ──
+	pcall(function()
+		if typeof(isfile) ~= "function" or typeof(readfile) ~= "function" then return end
+		if not isfile(CONFIG_FILE) then return end
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(readfile(CONFIG_FILE))
+		end)
+		if not ok or type(data) ~= "table" then return end
 
-	-- Priority: _G globals (from WebhookConfig.lua) > DEFAULT_WEBHOOK_URL constant
-	local cfgUrl  = typeof(_G.AFKWebhookURL)    == "string"  and _G.AFKWebhookURL    or ""
-	local cfgAuto = typeof(_G.AFKAutoWebhook)   == "boolean" and _G.AFKAutoWebhook   or true
-	local cfgMins = typeof(_G.AFKHeartbeatMins) == "number"  and _G.AFKHeartbeatMins or nil
-
-	local resolvedUrl = (cfgUrl ~= "" and cfgUrl) or DEFAULT_WEBHOOK_URL
-
-	if resolvedUrl ~= "" then
-		-- Push URL into state + GUI
-		webhookUrl   = resolvedUrl
-		urlBox.Text  = resolvedUrl
-		-- Apply heartbeat interval from config if provided
-		if cfgMins then
-			setHbInterval(cfgMins)
+		-- Interval
+		if type(data.interval) == "number" then
+			setInterval(data.interval)
 		end
-		-- Auto-enable?
-		local shouldEnable = cfgUrl ~= "" and cfgAuto      -- WebhookConfig sets auto
-		                  or (cfgUrl == "" and AUTO_START_WEBHOOK) -- fallback constant
-		if shouldEnable and not webhookEnabled then
-			webhookEnabled = true
+		-- Keybinds
+		if type(data.toggleKey) == "string" then
+			pcall(function()
+				local kc = Enum.KeyCode[data.toggleKey]
+				if kc then keybinds.toggle = kc ; toggleBindBtn.Text = "[ " .. keyName(kc) .. " ]" end
+			end)
+		end
+		if type(data.hideKey) == "string" then
+			pcall(function()
+				local kc = Enum.KeyCode[data.hideKey]
+				if kc then keybinds.hide = kc ; hideBindBtn.Text = "[ " .. keyName(kc) .. " ]" end
+			end)
+		end
+		-- Webhook URL
+		if type(data.webhookUrl) == "string" and data.webhookUrl ~= "" then
+			webhookUrl  = data.webhookUrl
+			urlBox.Text = data.webhookUrl
+		end
+		-- Heartbeat interval
+		if type(data.webhookHeartbeatMins) == "number" then
+			setHbInterval(data.webhookHeartbeatMins)
+		end
+		-- Webhook enabled — restore last state and fire startup ping if active
+		if type(data.webhookEnabled) == "boolean" then
+			webhookEnabled = data.webhookEnabled and webhookUrl ~= ""
 			updateWebhookToggleVisuals()
-			notify("Webhook Active  🔔", colors.green, 2)
-			sendWebhook("🟢 AFK Session Started",
-				"Script loaded & auto-clicking **started**.\n" ..
-				"Heartbeats every **" .. webhookHeartbeatMins .. " minutes**.",
-				DISCORD_GREEN,
-				{
-					{ name = "Game",           value = game.Name,    inline = true },
-					{ name = "Click Interval", value = interval .. "s", inline = true },
-				})
+			if webhookEnabled then
+				notify("Webhook Active  🔔", colors.green, 2)
+				sendWebhook("🟢 AFK Session Started",
+					"Script loaded & auto-clicking **started**.\n" ..
+					"Heartbeats every **" .. webhookHeartbeatMins .. " minutes**.",
+					DISCORD_GREEN,
+					{
+						{ name = "Game",           value = game.Name,       inline = true },
+						{ name = "Click Interval", value = interval .. "s",  inline = true },
+					})
+			end
 		end
-	end
+	end)
 end
 
 -- ═══════════════════════════════════════════════════════════
