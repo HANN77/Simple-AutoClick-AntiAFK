@@ -10,6 +10,13 @@ local DEFAULT_WEBHOOK_URL   = ""    -- paste your Discord webhook URL between th
 local AUTO_START_WEBHOOK    = false  -- set true to auto-enable webhook on load
 local DEFAULT_HEARTBEAT_MIN = 5      -- how often (minutes) to send a heartbeat
 
+-- Override defaults if global config exists (useful for keeping secrets out of GitHub)
+if typeof(_G.AFK_Config) == "table" then
+	if _G.AFK_Config.WebhookUrl   then DEFAULT_WEBHOOK_URL = _G.AFK_Config.WebhookUrl end
+	if _G.AFK_Config.AutoStart    ~= nil then AUTO_START_WEBHOOK  = _G.AFK_Config.AutoStart end
+	if _G.AFK_Config.HeartbeatMin then DEFAULT_HEARTBEAT_MIN = _G.AFK_Config.HeartbeatMin end
+end
+
 -- ═══════════════════════════════════════════════════════════
 -- Services
 -- ═══════════════════════════════════════════════════════════

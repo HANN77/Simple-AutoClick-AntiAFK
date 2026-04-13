@@ -43,18 +43,27 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/HANN77/Simple-AutoCli
 
 Monitor your AFK session from anywhere by connecting a Discord webhook.
 
-**Method A — Permanent (recommended for auto-execute):**
+**Method A — External Private File (Recommended & Safest):**
 
-Open `RobloxAutoClicker.lua` and fill in the two config lines at the very top:
-```lua
-local DEFAULT_WEBHOOK_URL   = "https://discord.com/api/webhooks/YOUR/WEBHOOK"
-local AUTO_START_WEBHOOK    = true   -- enable webhook automatically on load
-local DEFAULT_HEARTBEAT_MIN = 5      -- heartbeat every 5 minutes
-```
-The webhook will activate automatically every time the script loads.
+Keep your webhook URL entirely off GitHub by creating a separate file in your executor's `auto-execute` folder.
 
-**Method B — In-session via the GUI:**
-1. Paste your Discord webhook URL into the **"Paste Discord Webhook URL…"** field.
+1. Create a new file named `AFK_Secrets.lua` in your `auto-execute` folder.
+2. Paste this code into it:
+   ```lua
+   _G.AFK_Config = {
+       ["WebhookUrl"] = "PASTE_YOUR_LINK_HERE",
+       ["AutoStart"]  = true,
+       ["HeartbeatMin"] = 5
+   }
+   ```
+3. Now you can push your main script to GitHub safely! The main script will look for this global variable and use your private link automatically.
+
+**Method B — Direct Config (Public):**
+
+If you don't care about others seeing your webhook, you can edit the values at the top of `RobloxAutoClicker.lua` directly.
+
+**Method C — In-session via the GUI:**
+1. Paste your Discord webhook URL into the **"Paste Discord Webhook URL…"** field in the UI.
 2. Click **🔕 Webhook OFF** to toggle it **ON**.
 3. A confirmation message is sent to Discord immediately.
 
