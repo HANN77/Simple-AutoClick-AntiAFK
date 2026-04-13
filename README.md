@@ -1,4 +1,4 @@
-# ⚡ Simple Auto-Click & Anti-AFK v2.0 (Roblox)
+# ⚡ Simple Auto-Click & Anti-AFK v2.2 (Roblox)
 
 A lightweight, background-friendly Auto-Clicker and Anti-AFK script for Roblox with a polished UI, customizable keybinds, and clean unload support.
 
@@ -15,6 +15,7 @@ Farm your favorite games effectively without ever losing control of your PC!
 - **⏱️ Precise Interval Control**: Use the `+` / `−` buttons or type directly to set your click interval (supports decimals, minimum 0.1s).
 - **⏻ Clean Unload**: Done using the script? Hit the **Unload** button to cleanly disconnect everything and remove the UI—no need to close Roblox!
 - **👁️ Concealable**: Easily hide the interface so it doesn't clutter your gameplay. Uses executor GUI protection (like `syn.protect_gui`) to hide from in-game anti-cheats as well.
+- **⚡ Auto-Execute Ready**: Starts running the moment it's loaded. Perfect for placing in your executor's `auto-execute` folder for a fully automated AFK experience—if Roblox reloads, the script starts clickin' again instantly!
 
 ## 🚀 How to Use
 
@@ -29,7 +30,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/HANN77/Simple-AutoCli
 | Key | Function |
 | :--- | :--- |
 | **`[F]`** | Toggles the auto-clicker ON/OFF. *(Customizable in UI)* |
-| **`[Left Shift]`** | Hides/shows the menu. *(Customizable in UI)* |
+| **`[Right Shift]`** | Hides/shows the menu. *(Customizable in UI)* |
 | **`[Drag Title Bar]`** | Click and drag the title bar to reposition the menu. |
 
 ### Rebinding Keys

@@ -39,7 +39,7 @@ end
 -- ═══════════════════════════════════════════════════════════
 -- State
 -- ═══════════════════════════════════════════════════════════
-local isEnabled = false
+local isEnabled = true
 local interval = 5
 local connections = {}        -- Track all connections for clean unload
 local running = true          -- Master kill switch for loops
@@ -623,6 +623,9 @@ local totalHeight = 40 -- title bar
 totalHeight = math.max(totalHeight, 310) -- minimum
 mainFrame.Size = UDim2.new(0, 240, 0, totalHeight)
 
+-- Sync visuals to the auto-started state
+updateToggleVisuals()
+
 -- ═══════════════════════════════════════════════════════════
 -- Draggable Logic
 -- ═══════════════════════════════════════════════════════════
@@ -793,7 +796,7 @@ do
 		BackgroundTransparency = 0,
 	}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
-	-- Welcome notification
+	-- Welcome notification (auto-start active)
 	task.wait(0.4)
-	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Loaded", colors.accent, 3)
+	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Running  ✓", colors.green, 3)
 end
