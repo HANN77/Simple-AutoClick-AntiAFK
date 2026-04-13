@@ -86,4 +86,32 @@ Use this script responsibly. While it is designed to be as undetectable as possi
 
 ---
 
+## 🐕 Watchdog — Get Notified When Roblox Crashes
+
+> **Why does this exist?** When Roblox is force-closed or crashes, the Lua script dies instantly — it has no time to send a notification. The **Watchdog** runs *outside* of Roblox on Windows, so it always detects when the process disappears.
+
+### How it works
+
+| Lua Script (inside Roblox) | Watchdog (on Windows) |
+| :--- | :--- |
+| Notifies: Toggle ON/OFF, Unload | Notifies: Roblox started, Roblox **closed/crashed** |
+| Dies if Roblox crashes | Runs independently — always alive |
+
+Together they cover **every possible scenario**.
+
+### Setup (one time)
+
+1. Download **`Watchdog.ps1`** from this repo.
+2. Open it in Notepad and paste your webhook URL:
+   ```
+   $WebhookUrl = "https://discord.com/api/webhooks/..."
+   ```
+3. Right-click the file → **Run with PowerShell**. Minimize the window.
+4. That's it — it monitors Roblox and sends a Discord alert the instant it closes or crashes.
+
+**Optional — Auto-start with Windows:**
+Press `Win+R`, type `shell:startup`, and paste a shortcut to `Watchdog.ps1` in that folder. It'll run silently every time you log in.
+
+---
+
 *Authored by HANN77 / Antigravity*
