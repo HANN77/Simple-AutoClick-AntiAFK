@@ -4,13 +4,21 @@
 local SCRIPT_VERSION = "2.2"
 
 -- ═══════════════════════════════════════════════════════════
+-- Webhook Config  (fill these in once for auto-execute use)
+-- ═══════════════════════════════════════════════════════════
+local DEFAULT_WEBHOOK_URL   = ""    -- paste your Discord webhook URL between the quotes
+local AUTO_START_WEBHOOK    = false  -- set true to auto-enable webhook on load
+local DEFAULT_HEARTBEAT_MIN = 5      -- how often (minutes) to send a heartbeat
+
+-- ═══════════════════════════════════════════════════════════
 -- Services
 -- ═══════════════════════════════════════════════════════════
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
+local RunService    = game:GetService("RunService")
+local HttpService   = game:GetService("HttpService")
 
 -- Safe service access — these services may not exist on all executors
 local VirtualInputManager
@@ -51,6 +59,18 @@ local keybinds = {
 	hide   = Enum.KeyCode.RightShift,
 }
 local waitingForBind = nil    -- "toggle" or "hide" when listening
+
+-- Webhook state
+local webhookUrl           = DEFAULT_WEBHOOK_URL
+local webhookEnabled       = false
+local webhookHeartbeatMins = DEFAULT_HEARTBEAT_MIN
+local sessionStart         = tick()   -- for session-duration reporting
+
+-- Discord embed colours (decimal RGB)
+local DISCORD_GREEN  = 3329380   -- RGB( 50, 205, 100)
+local DISCORD_RED    = 15418960  -- RGB(235,  70,  80)
+local DISCORD_PURPLE = 7232255   -- RGB(110,  90, 255)
+local DISCORD_ORANGE = 16752690  -- RGB(255, 160,  50)
 
 -- ═══════════════════════════════════════════════════════════
 -- Color Palette
@@ -101,6 +121,54 @@ local function safeClick()
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
 	end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- Discord Webhook Helper
+-- ═══════════════════════════════════════════════════════════
+local function sendWebhook(title, description, color, fields)
+	if not webhookEnabled or webhookUrl == "" then return end
+	task.spawn(function()
+		local player   = Players.LocalPlayer
+		local whoami   = player and player.Name or "AFK User"
+		local gameName = game.Name ~= "" and game.Name or ("PlaceId: " .. tostring(game.PlaceId))
+
+		local body
+		local ok = pcall(function()
+			body = HttpService:JSONEncode({
+				username = "AFK Monitor",
+				embeds   = {{
+					title       = title,
+					description = description,
+					color       = color or DISCORD_PURPLE,
+					fields      = fields or {},
+					footer      = { text = "⚡ AutoClicker v" .. SCRIPT_VERSION .. "  •  " .. whoami .. "  •  " .. gameName },
+				}},
+			})
+		end)
+		if not ok or not body then return end
+
+		-- Support multiple executor HTTP APIs
+		pcall(function()
+			local fn = (typeof(request)      == "function" and request)
+				    or (typeof(http_request) == "function" and http_request)
+				    or (typeof(syn) == "table" and typeof(syn.request) == "function" and syn.request)
+			if fn then
+				fn({ Url = webhookUrl, Method = "POST",
+				     Headers = { ["Content-Type"] = "application/json" }, Body = body })
+			end
+		end)
+	end)
+end
+
+local function formatDuration(secs)
+	secs = math.floor(secs)
+	local h = math.floor(secs / 3600)
+	local m = math.floor((secs % 3600) / 60)
+	local s = secs % 60
+	if h > 0 then return string.format("%dh %dm", h, m)
+	elseif m > 0 then return string.format("%dm %ds", m, s)
+	else return string.format("%ds", s) end
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -579,23 +647,154 @@ end
 local toggleBindBtn = makeKeybindRow("Toggle", "toggle", 6)
 local hideBindBtn = makeKeybindRow("Hide UI", "hide", 7)
 
+-- ── Discord Webhook Section ──
+sectionLabel("DISCORD WEBHOOK", 8)
+
+local webhookToggleBtn = makeButton("🔕  Webhook OFF", colors.surface, 9, 30)
+webhookToggleBtn.TextColor3 = colors.textMuted
+webhookToggleBtn.TextSize   = 12
+
+local updateWebhookToggleVisuals
+updateWebhookToggleVisuals = function()
+	if webhookEnabled then
+		webhookToggleBtn.Text = "🔔  Webhook ON"
+		tween(webhookToggleBtn, {BackgroundColor3 = colors.green}, 0.3)
+		webhookToggleBtn.TextColor3 = colors.textPrimary
+	else
+		webhookToggleBtn.Text = "🔕  Webhook OFF"
+		tween(webhookToggleBtn, {BackgroundColor3 = colors.surface}, 0.3)
+		webhookToggleBtn.TextColor3 = colors.textMuted
+	end
+end
+
+webhookToggleBtn.MouseButton1Click:Connect(function()
+	if webhookUrl == "" then
+		notify("Enter a Webhook URL first!", colors.red, 2)
+		return
+	end
+	webhookEnabled = not webhookEnabled
+	updateWebhookToggleVisuals()
+	if webhookEnabled then
+		notify("Webhook Enabled  🔔", colors.green, 2)
+		sendWebhook("🟢 AFK Monitor Active",
+			"Script is live. You'll receive heartbeat & status updates here.\n" ..
+			"Heartbeat every **" .. webhookHeartbeatMins .. " minutes**.",
+			DISCORD_GREEN)
+	else
+		notify("Webhook Disabled", colors.textMuted, 2)
+	end
+end)
+
+-- Webhook URL text box
+local urlBox = Instance.new("TextBox")
+urlBox.Size              = UDim2.new(1, 0, 0, 28)
+urlBox.BackgroundColor3  = colors.surface
+urlBox.TextColor3        = colors.textPrimary
+urlBox.PlaceholderColor3 = colors.textMuted
+urlBox.PlaceholderText   = "Paste Discord Webhook URL…"
+urlBox.Text              = webhookUrl          -- pre-fill from config constant
+urlBox.Font              = Enum.Font.Gotham
+urlBox.TextSize          = 9
+urlBox.ClearTextOnFocus  = false
+urlBox.LayoutOrder       = 10
+urlBox.Parent            = content
+addCorner(urlBox, 6)
+addStroke(urlBox, colors.divider, 1)
+addPadding(urlBox, 0, 0, 8, 8)
+
+urlBox.FocusLost:Connect(function()
+	webhookUrl = urlBox.Text
+	if webhookUrl == "" and webhookEnabled then
+		webhookEnabled = false
+		updateWebhookToggleVisuals()
+		notify("Webhook disabled — no URL", colors.red, 2)
+	elseif webhookUrl ~= "" then
+		notify("Webhook URL saved  ✓", colors.accent, 1.5)
+	end
+end)
+
+-- Heartbeat interval row
+sectionLabel("HEARTBEAT (MINUTES)", 11)
+
+local hbRow = Instance.new("Frame")
+hbRow.Size               = UDim2.new(1, 0, 0, 32)
+hbRow.BackgroundTransparency = 1
+hbRow.LayoutOrder         = 12
+hbRow.Parent              = content
+
+local hbMinus = Instance.new("TextButton")
+hbMinus.Size             = UDim2.new(0, 32, 1, 0)
+hbMinus.BackgroundColor3 = colors.surface
+hbMinus.TextColor3       = colors.textPrimary
+hbMinus.Font             = Enum.Font.GothamBold
+hbMinus.TextSize         = 18
+hbMinus.Text             = "−"
+hbMinus.AutoButtonColor  = false
+hbMinus.Parent           = hbRow
+addCorner(hbMinus, 6)
+
+local hbBox = Instance.new("TextBox")
+hbBox.Size               = UDim2.new(1, -72, 1, 0)
+hbBox.Position           = UDim2.new(0, 36, 0, 0)
+hbBox.Text               = tostring(webhookHeartbeatMins)
+hbBox.PlaceholderText    = "min"
+hbBox.BackgroundColor3   = colors.surface
+hbBox.TextColor3         = colors.textPrimary
+hbBox.Font               = Enum.Font.GothamBold
+hbBox.TextSize           = 14
+hbBox.Parent             = hbRow
+addCorner(hbBox, 6)
+addStroke(hbBox, colors.divider, 1)
+
+local hbPlus = Instance.new("TextButton")
+hbPlus.Size              = UDim2.new(0, 32, 1, 0)
+hbPlus.Position          = UDim2.new(1, -32, 0, 0)
+hbPlus.BackgroundColor3  = colors.surface
+hbPlus.TextColor3        = colors.textPrimary
+hbPlus.Font              = Enum.Font.GothamBold
+hbPlus.TextSize          = 18
+hbPlus.Text              = "+"
+hbPlus.AutoButtonColor   = false
+hbPlus.Parent            = hbRow
+addCorner(hbPlus, 6)
+
+local function setHbInterval(val)
+	val = math.clamp(math.floor(val), 1, 60)
+	webhookHeartbeatMins = val
+	hbBox.Text = tostring(val)
+end
+
+hbMinus.MouseButton1Click:Connect(function()
+	setHbInterval(webhookHeartbeatMins - 1)
+	notify("Heartbeat: " .. webhookHeartbeatMins .. "m", colors.accent, 1.5)
+end)
+hbPlus.MouseButton1Click:Connect(function()
+	setHbInterval(webhookHeartbeatMins + 1)
+	notify("Heartbeat: " .. webhookHeartbeatMins .. "m", colors.accent, 1.5)
+end)
+hbBox.FocusLost:Connect(function()
+	local val = tonumber(hbBox.Text)
+	if val and val > 0 then setHbInterval(val)
+	else hbBox.Text = tostring(webhookHeartbeatMins) end
+end)
+
 -- ── Divider ──
 local divider = Instance.new("Frame")
 divider.Size = UDim2.new(0.8, 0, 0, 1)
 divider.BackgroundColor3 = colors.divider
 divider.BorderSizePixel = 0
-divider.LayoutOrder = 8
+divider.LayoutOrder = 14
 divider.Parent = content
 
 -- Center the divider
 local dividerLayout = Instance.new("Frame")
 dividerLayout.Size = UDim2.new(1, 0, 0, 8)
 dividerLayout.BackgroundTransparency = 1
-dividerLayout.LayoutOrder = 8
+dividerLayout.LayoutOrder = 14
 dividerLayout.Parent = content
 
 -- ── Unload Button ──
-local unloadBtn = makeButton("⏻  Unload Script", colors.surface, 9, 32)
+local unloadBtn = makeButton("⏻  Unload Script", colors.surface, 15, 32)
 unloadBtn.TextSize = 12
 unloadBtn.TextColor3 = colors.red
 
@@ -607,20 +806,23 @@ creditLabel.Text = "by FusedHann  ·  v" .. SCRIPT_VERSION
 creditLabel.TextColor3 = Color3.fromRGB(60, 60, 80)
 creditLabel.Font = Enum.Font.Gotham
 creditLabel.TextSize = 10
-creditLabel.LayoutOrder = 10
+creditLabel.LayoutOrder = 16
 creditLabel.Parent = content
 
 -- ── Finalize main frame height ──
 local totalHeight = 40 -- title bar
-	+ 8 + 8  -- content padding top/bottom
+	+ 8 + 8   -- content padding top/bottom
 	+ 16 + 38 -- clicker section
 	+ 16 + 32 -- interval section
 	+ 16 + 30 + 30 -- keybinds section
+	+ 16 + 30 -- webhook toggle
+	+ 28      -- webhook URL box
+	+ 16 + 32 -- heartbeat interval
 	+ 8       -- divider spacer
 	+ 32      -- unload
 	+ 16      -- credit
-	+ (6 * 10) -- spacing between items
-totalHeight = math.max(totalHeight, 310) -- minimum
+	+ (6 * 16) -- spacing for all items
+totalHeight = math.max(totalHeight, 530) -- minimum
 mainFrame.Size = UDim2.new(0, 240, 0, totalHeight)
 
 -- Sync visuals to the auto-started state
@@ -670,8 +872,14 @@ local function toggleAutoClicker()
 	updateToggleVisuals()
 	if isEnabled then
 		notify("Auto-Clicker Started  ✓", colors.green)
+		sendWebhook("▶ Auto-Clicker Started",
+			"The clicker is now **active**.\nClick interval: **" .. interval .. "s**",
+			DISCORD_GREEN)
 	else
 		notify("Auto-Clicker Stopped  ✗", colors.red)
+		sendWebhook("⏸ Auto-Clicker Paused",
+			"The clicker was **paused** manually.\nSession so far: **" .. formatDuration(tick() - sessionStart) .. "**",
+			DISCORD_ORANGE)
 	end
 end
 
@@ -746,7 +954,11 @@ local function unloadScript()
 
 	-- Show farewell notification before teardown
 	notify("Script Unloaded  — Goodbye!", colors.red, 1.5)
-	task.wait(0.4)
+	sendWebhook("🔴 AFK Monitor Stopped",
+		"The script was **unloaded**. Auto-clicking is __stopped__.\n" ..
+		"Session lasted **" .. formatDuration(tick() - sessionStart) .. "**.",
+		DISCORD_RED)
+	task.wait(0.65) -- slightly longer to let webhook fire
 
 	running = false
 	isEnabled = false
@@ -799,4 +1011,44 @@ do
 	-- Welcome notification (auto-start active)
 	task.wait(0.4)
 	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Running  ✓", colors.green, 3)
+
+	-- Auto-enable webhook if pre-configured in the config block at top
+	if DEFAULT_WEBHOOK_URL ~= "" and AUTO_START_WEBHOOK then
+		webhookEnabled = true
+		updateWebhookToggleVisuals()
+		sendWebhook("🟢 AFK Session Started",
+			"Script loaded & auto-clicking **started**.\n" ..
+			"Heartbeats every **" .. webhookHeartbeatMins .. " minutes**.",
+			DISCORD_GREEN,
+			{
+				{ name = "Game",           value = game.Name,    inline = true },
+				{ name = "Click Interval", value = interval .. "s", inline = true },
+			})
+	end
 end
+
+-- ═══════════════════════════════════════════════════════════
+-- Webhook Heartbeat Loop
+-- Proves to Discord that both the script AND Roblox are alive.
+-- If heartbeats stop arriving, Roblox likely crashed / was closed.
+-- ═══════════════════════════════════════════════════════════
+task.spawn(function()
+	while running do
+		task.wait(webhookHeartbeatMins * 60)
+		if not running then break end
+		if not webhookEnabled or webhookUrl == "" then continue end
+
+		local status  = isEnabled and "🟢 **AUTO-CLICKING**" or "⏸ **PAUSED**"
+		local session = formatDuration(tick() - sessionStart)
+
+		sendWebhook(
+			"💓 AFK Heartbeat",
+			status .. "\nSession running for **" .. session .. "**",
+			isEnabled and DISCORD_GREEN or DISCORD_ORANGE,
+			{
+				{ name = "Click Interval", value = interval .. "s", inline = true },
+				{ name = "Game",           value = game.Name,        inline = true },
+			}
+		)
+	end
+end)

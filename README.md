@@ -16,6 +16,7 @@ Farm your favorite games effectively without ever losing control of your PC!
 - **⏻ Clean Unload**: Done using the script? Hit the **Unload** button to cleanly disconnect everything and remove the UI—no need to close Roblox!
 - **👁️ Concealable**: Easily hide the interface so it doesn't clutter your gameplay. Uses executor GUI protection (like `syn.protect_gui`) to hide from in-game anti-cheats as well.
 - **⚡ Auto-Execute Ready**: Starts running the moment it's loaded. Perfect for placing in your executor's `auto-execute` folder for a fully automated AFK experience—if Roblox reloads, the script starts clickin' again instantly!
+- **📳 Discord Webhook Monitor**: Get real-time AFK status updates directly in Discord. Periodic heartbeats confirm both the script *and* Roblox are still running. If the heartbeats stop, something went wrong.
 
 ## 🚀 How to Use
 
@@ -37,6 +38,45 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/HANN77/Simple-AutoCli
 1. Click the key button next to **Toggle** or **Hide UI** in the Keybinds section.
 2. The button will show `[ ... ]` — press any key to set it.
 3. Press `Escape` to cancel without changing.
+
+## 📳 Discord Webhook Setup
+
+Monitor your AFK session from anywhere by connecting a Discord webhook.
+
+**Method A — Permanent (recommended for auto-execute):**
+
+Open `RobloxAutoClicker.lua` and fill in the two config lines at the very top:
+```lua
+local DEFAULT_WEBHOOK_URL   = "https://discord.com/api/webhooks/YOUR/WEBHOOK"
+local AUTO_START_WEBHOOK    = true   -- enable webhook automatically on load
+local DEFAULT_HEARTBEAT_MIN = 5      -- heartbeat every 5 minutes
+```
+The webhook will activate automatically every time the script loads.
+
+**Method B — In-session via the GUI:**
+1. Paste your Discord webhook URL into the **"Paste Discord Webhook URL…"** field.
+2. Click **🔕 Webhook OFF** to toggle it **ON**.
+3. A confirmation message is sent to Discord immediately.
+
+### ⚡ Events Sent to Discord
+
+| Event | When it fires | Embed color |
+| :--- | :--- | :---: |
+| **🟢 AFK Session Started** | Script loads (auto-execute) | Green |
+| **▶ Auto-Clicker Started** | User enables clicking | Green |
+| **⏸ Auto-Clicker Paused** | User disables clicking | Orange |
+| **💓 AFK Heartbeat** | Every N minutes (configurable) | Green/Orange |
+| **🔴 AFK Monitor Stopped** | Script is unloaded | Red |
+
+### 🤔 How to tell if Roblox is still open
+The heartbeat itself answers this question: **if Discord is receiving heartbeats, both the script and Roblox are running.** If heartbeats stop arriving and you never received a "Stopped" message, Roblox most likely crashed or was force-closed.
+
+### Creating a Discord webhook
+1. Open the Discord channel you want notifications in.
+2. Go to **Channel Settings → Integrations → Webhooks → New Webhook**.
+3. Copy the webhook URL and paste it into the script or the GUI.
+
+---
 
 ## ⏻ Unloading
 Click the **⏻ Unload Script** button at the bottom of the menu. The script will:
