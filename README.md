@@ -41,49 +41,59 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/HANN77/Simple-AutoCli
 
 ## 📳 Discord Webhook Setup
 
-Monitor your AFK session from anywhere by connecting a Discord webhook.
+Monitor your AFK session from anywhere. Your webhook URL is stored in a **separate private file** that is never uploaded to GitHub.
 
-**Method A — External Private File (Recommended & Safest):**
+### Step 1 — Get your Discord Webhook URL
 
-Keep your webhook URL entirely off GitHub by creating a separate file in your executor's `auto-execute` folder.
+1. Open the Discord **channel** you want to receive notifications in.
+2. Click the ⚙️ gear icon → **Integrations** → **Webhooks** → **New Webhook**.
+3. Give it a name (e.g. `AFK Monitor`) then click **Copy Webhook URL**.
 
-1. Create a new file named `AFK_Secrets.lua` in your `auto-execute` folder.
-2. Paste this code into it:
-   ```lua
-   _G.AFK_Config = {
-       ["WebhookUrl"] = "PASTE_YOUR_LINK_HERE",
-       ["AutoStart"]  = true,
-       ["HeartbeatMin"] = 5
-   }
-   ```
-3. Now you can push your main script to GitHub safely! The main script will look for this global variable and use your private link automatically.
+### Step 2 — Set up `WebhookConfig.lua`
 
-**Method B — Direct Config (Public):**
+Download **`WebhookConfig.lua`** from this repo and open it in any text editor:
 
-If you don't care about others seeing your webhook, you can edit the values at the top of `RobloxAutoClicker.lua` directly.
+```lua
+_G.AFKWebhookURL    = "PASTE_YOUR_DISCORD_WEBHOOK_URL_HERE"
+_G.AFKAutoWebhook   = true   -- auto-enable on load
+_G.AFKHeartbeatMins = 5      -- heartbeat every 5 minutes (1–60)
+```
 
-**Method C — In-session via the GUI:**
-1. Paste your Discord webhook URL into the **"Paste Discord Webhook URL…"** field in the UI.
-2. Click **🔕 Webhook OFF** to toggle it **ON**.
-3. A confirmation message is sent to Discord immediately.
+Replace `PASTE_YOUR_DISCORD_WEBHOOK_URL_HERE` with your copied URL.  
+> ✅ This file is `.gitignore`d — your URL will **never** be pushed to GitHub.
 
-### ⚡ Events Sent to Discord
+### Step 3 — Put both files in auto-execute
 
-| Event | When it fires | Embed color |
+Place **both files** in your executor's `autoexec` / `auto-execute` folder:
+
+```
+📁 autoexec/
+  ├── WebhookConfig.lua        ← your private config (never shared)
+  └── RobloxAutoClicker.lua    ← the main script
+```
+
+> 💡 `WebhookConfig.lua` must be in the same folder so it runs alongside the main script.
+
+### Step 4 — Done!
+
+Open Roblox. Within a few seconds you'll see a **🟢 AFK Session Started** message appear in your Discord channel. Every time Roblox reloads, it repeats automatically.
+
+---
+
+### 📨 Events sent to Discord
+
+| Event | When it fires | Color |
 | :--- | :--- | :---: |
-| **🟢 AFK Session Started** | Script loads (auto-execute) | Green |
-| **▶ Auto-Clicker Started** | User enables clicking | Green |
-| **⏸ Auto-Clicker Paused** | User disables clicking | Orange |
-| **💓 AFK Heartbeat** | Every N minutes (configurable) | Green/Orange |
-| **🔴 AFK Monitor Stopped** | Script is unloaded | Red |
+| 🟢 **AFK Session Started** | Script loads | Green |
+| ▶ **Auto-Clicker Started** | Toggle ON | Green |
+| ⏸ **Auto-Clicker Paused** | Toggle OFF | Orange |
+| 💓 **AFK Heartbeat** | Every N minutes | Green/Orange |
+| 🔴 **AFK Monitor Stopped** | Unload button pressed | Red |
 
-### 🤔 How to tell if Roblox is still open
-The heartbeat itself answers this question: **if Discord is receiving heartbeats, both the script and Roblox are running.** If heartbeats stop arriving and you never received a "Stopped" message, Roblox most likely crashed or was force-closed.
+### 🤔 Is Roblox still open?
 
-### Creating a Discord webhook
-1. Open the Discord channel you want notifications in.
-2. Go to **Channel Settings → Integrations → Webhooks → New Webhook**.
-3. Copy the webhook URL and paste it into the script or the GUI.
+If your Discord is **receiving heartbeats** → script & Roblox are both alive.  
+If heartbeats **stopped without a 🔴 Stopped message** → Roblox likely crashed or was force-closed.
 
 ---
 

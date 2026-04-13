@@ -10,13 +10,6 @@ local DEFAULT_WEBHOOK_URL   = ""    -- paste your Discord webhook URL between th
 local AUTO_START_WEBHOOK    = false  -- set true to auto-enable webhook on load
 local DEFAULT_HEARTBEAT_MIN = 5      -- how often (minutes) to send a heartbeat
 
--- Override defaults if global config exists (useful for keeping secrets out of GitHub)
-if typeof(_G.AFK_Config) == "table" then
-	if _G.AFK_Config.WebhookUrl   then DEFAULT_WEBHOOK_URL = _G.AFK_Config.WebhookUrl end
-	if _G.AFK_Config.AutoStart    ~= nil then AUTO_START_WEBHOOK  = _G.AFK_Config.AutoStart end
-	if _G.AFK_Config.HeartbeatMin then DEFAULT_HEARTBEAT_MIN = _G.AFK_Config.HeartbeatMin end
-end
-
 -- ═══════════════════════════════════════════════════════════
 -- Services
 -- ═══════════════════════════════════════════════════════════
@@ -1019,18 +1012,41 @@ do
 	task.wait(0.4)
 	notify("⚡ AutoClicker v" .. SCRIPT_VERSION .. " Running  ✓", colors.green, 3)
 
-	-- Auto-enable webhook if pre-configured in the config block at top
-	if DEFAULT_WEBHOOK_URL ~= "" and AUTO_START_WEBHOOK then
-		webhookEnabled = true
-		updateWebhookToggleVisuals()
-		sendWebhook("🟢 AFK Session Started",
-			"Script loaded & auto-clicking **started**.\n" ..
-			"Heartbeats every **" .. webhookHeartbeatMins .. " minutes**.",
-			DISCORD_GREEN,
-			{
-				{ name = "Game",           value = game.Name,    inline = true },
-				{ name = "Click Interval", value = interval .. "s", inline = true },
-			})
+	-- ── Read from WebhookConfig.lua (if it's in auto-execute too) ──
+	-- Give the executor a moment to finish running both scripts.
+	task.wait(0.5)
+
+	-- Priority: _G globals (from WebhookConfig.lua) > DEFAULT_WEBHOOK_URL constant
+	local cfgUrl  = typeof(_G.AFKWebhookURL)    == "string"  and _G.AFKWebhookURL    or ""
+	local cfgAuto = typeof(_G.AFKAutoWebhook)   == "boolean" and _G.AFKAutoWebhook   or true
+	local cfgMins = typeof(_G.AFKHeartbeatMins) == "number"  and _G.AFKHeartbeatMins or nil
+
+	local resolvedUrl = (cfgUrl ~= "" and cfgUrl) or DEFAULT_WEBHOOK_URL
+
+	if resolvedUrl ~= "" then
+		-- Push URL into state + GUI
+		webhookUrl   = resolvedUrl
+		urlBox.Text  = resolvedUrl
+		-- Apply heartbeat interval from config if provided
+		if cfgMins then
+			setHbInterval(cfgMins)
+		end
+		-- Auto-enable?
+		local shouldEnable = cfgUrl ~= "" and cfgAuto      -- WebhookConfig sets auto
+		                  or (cfgUrl == "" and AUTO_START_WEBHOOK) -- fallback constant
+		if shouldEnable and not webhookEnabled then
+			webhookEnabled = true
+			updateWebhookToggleVisuals()
+			notify("Webhook Active  🔔", colors.green, 2)
+			sendWebhook("🟢 AFK Session Started",
+				"Script loaded & auto-clicking **started**.\n" ..
+				"Heartbeats every **" .. webhookHeartbeatMins .. " minutes**.",
+				DISCORD_GREEN,
+				{
+					{ name = "Game",           value = game.Name,    inline = true },
+					{ name = "Click Interval", value = interval .. "s", inline = true },
+				})
+		end
 	end
 end
 
