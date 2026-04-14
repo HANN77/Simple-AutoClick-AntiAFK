@@ -58,7 +58,9 @@ local waitingForBind = nil    -- "toggle" or "hide" when listening
 local webhookUrl           = ""
 local webhookEnabled       = false
 local webhookHeartbeatMins = 5
-local sessionStart         = tick()   -- for session-duration reporting
+local sessionStart         = tick()
+local sessionClicks        = 0        -- track clicks for session stats
+local isBeingKicked        = false    -- flag when kicked/disconnected
 
 -- Discord embed colours (decimal RGB)
 local DISCORD_GREEN  = 3329380   -- RGB( 50, 205, 100)
@@ -936,6 +938,7 @@ task.spawn(function()
 		local ok, err = pcall(function()
 			if isEnabled then
 				safeClick()
+				sessionClicks = sessionClicks + 1
 				task.wait(math.max(interval, 0.05)) -- floor at 50ms to prevent freeze
 			else
 				task.wait(0.1)
@@ -961,6 +964,97 @@ if LocalPlayer and VirtualUser then
 			VirtualUser:ClickButton2(Vector2.new())
 		end)
 	end))
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- Kick/Disconnect Detection & Recovery
+-- ═══════════════════════════════════════════════════════════
+local function sendKickWebhook(reason)
+	if not webhookEnabled or webhookUrl == "" then return end
+	
+	local sessionDuration = formatDuration(tick() - sessionStart)
+	local clickRate = sessionClicks / math.max(1, (tick() - sessionStart))
+	
+	sendWebhook(
+		"⚠️ KICKED / DISCONNECTED",
+		"**" .. reason .. "**\n" ..
+		"Session lasted: **" .. sessionDuration .. "**\n" ..
+		"Total clicks: **" .. sessionClicks .. "**",
+		DISCORD_RED,
+		{
+			{ name = "Click Rate", value = string.format("%.1f/sec", clickRate), inline = true },
+			{ name = "Game", value = game.Name, inline = true },
+		}
+	)
+end
+
+-- Detect kick notifications in CoreGui (Roblox sends kick reason here)
+task.spawn(function()
+	while running do
+		task.wait(0.5)
+		
+		local success, result = pcall(function()
+			local notif = CoreGui:FindFirstChild("RobloxKickGUI") 
+				or CoreGui:FindFirstChild("NotificationFrame")
+			if notif then
+				for _, child in ipairs(notif:GetChildren()) do
+					if child:IsA("Frame") then
+						for _, label in ipairs(child:GetDescendants()) do
+							if label:IsA("TextLabel") and label.Text ~= "" then
+								return label.Text
+							end
+						end
+					end
+				end
+			end
+			return nil
+		end)
+		
+		if success and result and not isBeingKicked then
+			isBeingKicked = true
+			running = false
+			sendKickWebhook("Kick Notification: " .. string.sub(result, 1, 100))
+			task.wait(1)
+			isBeingKicked = false
+		end
+	end
+end)
+
+-- Detect network disconnection
+local NetworkClient = game:GetService("NetworkClient")
+if NetworkClient then
+	table.insert(connections, NetworkClient.Disconnected:Connect(function()
+		if isBeingKicked then return end
+		isBeingKicked = true
+		running = false
+		sendKickWebhook("Network Disconnected")
+	end))
+end
+
+-- Detect player removal (kicked from game)
+table.insert(connections, Players.PlayerRemoving:Connect(function(leavingPlayer)
+	if leavingPlayer == LocalPlayer and not isBeingKicked then
+		isBeingKicked = true
+		running = false
+		sendKickWebhook("Removed from Game")
+	end
+end))
+
+-- Graceful atexit handler (fires on script unload but before destruction)
+local originalUnload = unloadScript
+unloadScript = function()
+	if unloading then return end
+	unloading = true
+	
+	if isEnabled and sessionClicks > 0 then
+		sendWebhook("🟡 Script Unloaded (Normal)",
+			"Auto-clicking **stopped gracefully**.\n" ..
+			"Session: **" .. formatDuration(tick() - sessionStart) .. "**\n" ..
+			"Clicks: **" .. sessionClicks .. "**",
+			DISCORD_ORANGE)
+	end
+	
+	originalUnload()
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -1093,19 +1187,21 @@ task.spawn(function()
 	while running do
 		task.wait(webhookHeartbeatMins * 60)
 		if not running then break end
-		if not webhookEnabled or webhookUrl == "" then continue end
+		local hbRunning = webhookEnabled and webhookUrl ~= ""
+		if hbRunning then
+			local status  = isEnabled and "🟢 **AUTO-CLICKING**" or "⏸ **PAUSED**"
+			local session = formatDuration(tick() - sessionStart)
 
-		local status  = isEnabled and "🟢 **AUTO-CLICKING**" or "⏸ **PAUSED**"
-		local session = formatDuration(tick() - sessionStart)
-
-		sendWebhook(
-			"💓 AFK Heartbeat",
-			status .. "\nSession running for **" .. session .. "**",
-			isEnabled and DISCORD_GREEN or DISCORD_ORANGE,
-			{
-				{ name = "Click Interval", value = interval .. "s", inline = true },
-				{ name = "Game",           value = game.Name,        inline = true },
-			}
-		)
+			sendWebhook(
+				"💓 AFK Heartbeat",
+				status .. "\nSession running for **" .. session .. "**",
+				isEnabled and DISCORD_GREEN or DISCORD_ORANGE,
+				{
+					{ name = "Clicks", value = sessionClicks, inline = true },
+					{ name = "Click Interval", value = interval .. "s", inline = true },
+					{ name = "Game",           value = game.Name,        inline = true },
+				}
+			)
+		end
 	end
 end)
