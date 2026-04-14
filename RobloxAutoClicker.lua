@@ -685,20 +685,26 @@ updateWebhookToggleVisuals = function()
 end
 
 webhookToggleBtn.MouseButton1Click:Connect(function()
-	if webhookUrl == "" then
-		notify("Enter a Webhook URL first!", colors.red, 2)
+	if webhookUrl == nil or #webhookUrl == 0 then
+		notify('Enter a Webhook URL first!', colors.red, 2)
 		return
 	end
 	webhookEnabled = not webhookEnabled
 	updateWebhookToggleVisuals()
 	if webhookEnabled then
-		notify("Webhook Enabled  🔔", colors.green, 2)
-		sendWebhook("🟢 AFK Monitor Active",
-			"Script is live. You'll receive heartbeat & status updates here.\n" ..
-			"Heartbeat every **" .. webhookHeartbeatMins .. " minutes**.",
-			DISCORD_GREEN)
+		sendWebhook(
+			'🟢 AFK Monitor Active',
+			'Script is live. You will receive heartbeat and status updates here.' ..
+				'\n' ..
+				'Heartbeat every **' .. webhookHeartbeatMins .. ' minutes**.',
+			DISCORD_GREEN
+		)
 	else
-		notify("Webhook Disabled", colors.textMuted, 2)
+		sendWebhook(
+			'🔴 AFK Monitor Disabled',
+			'The webhook has been **disabled** manually.\nHeartbeat updates will stop.',
+			DISCORD_ORANGE
+		)
 	end
 	saveSettings()
 end)
@@ -710,7 +716,7 @@ urlBox.BackgroundColor3  = colors.surface
 urlBox.TextColor3        = colors.textPrimary
 urlBox.PlaceholderColor3 = colors.textMuted
 urlBox.PlaceholderText   = "Paste Discord Webhook URL…"
-urlBox.Text              = webhookUrl          -- pre-fill from config constant
+urlBox.Text              = (webhookUrl ~= "") and string.rep("*", 30) or ""
 urlBox.Font              = Enum.Font.Gotham
 urlBox.TextSize          = 9
 urlBox.ClearTextOnFocus  = false
@@ -720,14 +726,26 @@ addCorner(urlBox, 6)
 addStroke(urlBox, colors.divider, 1)
 addPadding(urlBox, 0, 0, 8, 8)
 
+local MASK_STR = string.rep("*", 30)
+urlBox.Focused:Connect(function()
+	if urlBox.Text == MASK_STR then urlBox.Text = "" end
+end)
+
 urlBox.FocusLost:Connect(function()
-	webhookUrl = urlBox.Text
-	if webhookUrl == "" and webhookEnabled then
-		webhookEnabled = false
-		updateWebhookToggleVisuals()
-		notify("Webhook disabled — no URL", colors.red, 2)
-	elseif webhookUrl ~= "" then
+	local txt = urlBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+	if txt ~= "" and txt ~= MASK_STR then
+		webhookUrl = txt
+		urlBox.Text = MASK_STR
 		notify("Webhook URL saved  ✓", colors.accent, 1.5)
+	elseif txt == "" then
+		webhookUrl = ""
+		if webhookEnabled then
+			webhookEnabled = false
+			updateWebhookToggleVisuals()
+			notify("Webhook disabled — no URL", colors.red, 2)
+		end
+	else
+		urlBox.Text = MASK_STR
 	end
 	saveSettings()
 end)
@@ -966,80 +984,6 @@ if LocalPlayer and VirtualUser then
 	end))
 end
 
--- ═══════════════════════════════════════════════════════════
--- Kick/Disconnect Detection & Recovery
--- ═══════════════════════════════════════════════════════════
-local function sendKickWebhook(reason)
-	if not webhookEnabled or webhookUrl == "" then return end
-	
-	local sessionDuration = formatDuration(tick() - sessionStart)
-	local clickRate = sessionClicks / math.max(1, (tick() - sessionStart))
-	
-	sendWebhook(
-		"⚠️ KICKED / DISCONNECTED",
-		"**" .. reason .. "**\n" ..
-		"Session lasted: **" .. sessionDuration .. "**\n" ..
-		"Total clicks: **" .. sessionClicks .. "**",
-		DISCORD_RED,
-		{
-			{ name = "Click Rate", value = string.format("%.1f/sec", clickRate), inline = true },
-			{ name = "Game", value = game.Name, inline = true },
-		}
-	)
-end
-
--- Detect kick notifications in CoreGui (Roblox sends kick reason here)
-task.spawn(function()
-	while running do
-		task.wait(0.5)
-		
-		local success, result = pcall(function()
-			local notif = CoreGui:FindFirstChild("RobloxKickGUI") 
-				or CoreGui:FindFirstChild("NotificationFrame")
-			if notif then
-				for _, child in ipairs(notif:GetChildren()) do
-					if child:IsA("Frame") then
-						for _, label in ipairs(child:GetDescendants()) do
-							if label:IsA("TextLabel") and label.Text ~= "" then
-								return label.Text
-							end
-						end
-					end
-				end
-			end
-			return nil
-		end)
-		
-		if success and result and not isBeingKicked then
-			isBeingKicked = true
-			running = false
-			sendKickWebhook("Kick Notification: " .. string.sub(result, 1, 100))
-			task.wait(1)
-			isBeingKicked = false
-		end
-	end
-end)
-
--- Detect network disconnection
-local NetworkClient = game:GetService("NetworkClient")
-if NetworkClient then
-	table.insert(connections, NetworkClient.Disconnected:Connect(function()
-		if isBeingKicked then return end
-		isBeingKicked = true
-		running = false
-		sendKickWebhook("Network Disconnected")
-	end))
-end
-
--- Detect player removal (kicked from game)
-table.insert(connections, Players.PlayerRemoving:Connect(function(leavingPlayer)
-	if leavingPlayer == LocalPlayer and not isBeingKicked then
-		isBeingKicked = true
-		running = false
-		sendKickWebhook("Removed from Game")
-	end
-end))
-
 -- Graceful atexit handler (fires on script unload but before destruction)
 local originalUnload = unloadScript
 unloadScript = function()
@@ -1065,11 +1009,8 @@ local function unloadScript()
 	unloading = true
 
 	-- Show farewell notification before teardown
-	notify("Script Unloaded  — Goodbye!", colors.red, 1.5)
-	sendWebhook("🔴 AFK Monitor Stopped",
-		"The script was **unloaded**. Auto-clicking is __stopped__.\n" ..
-		"Session lasted **" .. formatDuration(tick() - sessionStart) .. "**.",
-		DISCORD_RED)
+	notify('Script Unloaded  — Goodbye!', colors.red, 1.5)
+	
 	task.wait(0.65) -- slightly longer to let webhook fire
 
 	running = false
@@ -1153,7 +1094,7 @@ do
 		-- Webhook URL
 		if type(data.webhookUrl) == "string" and data.webhookUrl ~= "" then
 			webhookUrl  = data.webhookUrl
-			urlBox.Text = data.webhookUrl
+			urlBox.Text = string.rep("*", 30)
 		end
 		-- Heartbeat interval
 		if type(data.webhookHeartbeatMins) == "number" then
