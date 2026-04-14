@@ -9,7 +9,7 @@
 # ============================================================
 
 # -- CONFIG --------------------------------------------------
-$WebhookUrl    = "https://discord.com/api/webhooks/1493206004500922469/eb2u0VfGoKwahEONqDAB-qTRkD2Sr31bvFXR8A0pWfqzSgw-V2HyF6pYhXmrSKOCy_Vd"
+$WebhookUrl    = "PASTE_YOUR_DISCORD_WEBHOOK_URL_HERE"
 $CheckInterval = 8          # seconds between each check
 $ProcessName   = "RobloxPlayerBeta"
 # ------------------------------------------------------------
