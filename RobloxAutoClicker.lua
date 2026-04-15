@@ -984,21 +984,29 @@ if LocalPlayer and VirtualUser then
 	end))
 end
 
--- Graceful atexit handler (fires on script unload but before destruction)
-local originalUnload = unloadScript
-unloadScript = function()
-	if unloading then return end
-	unloading = true
-	
-	if isEnabled and sessionClicks > 0 then
-		sendWebhook("🟡 Script Unloaded (Normal)",
-			"Auto-clicking **stopped gracefully**.\n" ..
-			"Session: **" .. formatDuration(tick() - sessionStart) .. "**\n" ..
-			"Clicks: **" .. sessionClicks .. "**",
-			DISCORD_ORANGE)
-	end
-	
-	originalUnload()
+-- ═══════════════════════════════════════════════════════════
+-- Game-exit / Executor-unload kill switch
+-- Stops the click loop when: the game closes, the player is
+-- removed, or the executor unloads the script mid-session.
+-- ═══════════════════════════════════════════════════════════
+local function killScript()
+	running    = false
+	isEnabled  = false
+end
+
+-- game:BindToClose fires when the Roblox client is closing
+pcall(function()
+	game:BindToClose(killScript)
+end)
+
+-- LocalPlayer.AncestryChanged fires when the player is removed
+-- from the DataModel (kicked, disconnected, left game)
+if LocalPlayer then
+	table.insert(connections, LocalPlayer.AncestryChanged:Connect(function()
+		if not LocalPlayer.Parent then
+			killScript()
+		end
+	end))
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -1008,13 +1016,14 @@ local function unloadScript()
 	if unloading then return end  -- prevent double-unload crash
 	unloading = true
 
+	-- Kill the click loop IMMEDIATELY before any awaits
+	running   = false
+	isEnabled = false
+
 	-- Show farewell notification before teardown
 	notify('Script Unloaded  — Goodbye!', colors.red, 1.5)
-	
-	task.wait(0.65) -- slightly longer to let webhook fire
 
-	running = false
-	isEnabled = false
+	task.wait(0.65) -- let webhook fire, toast animate
 
 	-- Disconnect every tracked connection
 	for _, conn in ipairs(connections) do
