@@ -1,7 +1,7 @@
 -- Simple Auto Clicker By FusedHann
--- Enhanced Edition v2.2
+-- Enhanced Edition v2.3
 
-local SCRIPT_VERSION = "2.2"
+local SCRIPT_VERSION = "2.3"
 
 
 -- ═══════════════════════════════════════════════════════════

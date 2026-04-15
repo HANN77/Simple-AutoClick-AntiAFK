@@ -1,4 +1,4 @@
-# ⚡ Simple Auto-Click & Anti-AFK v2.2 (Roblox)
+# ⚡ Simple Auto-Click & Anti-AFK v2.3 (Roblox)
 
 A lightweight, background-friendly Auto-Clicker and Anti-AFK script for Roblox with a polished UI, customizable keybinds, and clean unload support.
 
